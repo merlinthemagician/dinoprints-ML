@@ -1,0 +1,1289 @@
+---
+title: "Supplementary Material for Jones et al. (2024)"
+author: "Michael Jones, Jens Lallensack, Ian Jarman, Peter Falkingham and Ivo Siekmann"
+date: ''
+output: 
+  pdf_document:
+    extra_dependencies: "subfig"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pander)
+library(kableExtra)
+
+# Switch to be set for plotting to PDF
+plotPDF <- FALSE
+```
+
+## Dinosaur footprints landmarks data set
+
+The data set consists of landmarks that represent dinosaur footprints. The variables `X` and `Y` are the coordinates of the landmarks, `id` assigns a number to each footprint and `Group` is the group of dinosaurs that a footprint belongs to:
+
+```{r}
+dinoprints <- read.csv("DinoPrints.csv", stringsAsFactors = TRUE)
+knitr::kable(head(dinoprints))
+```
+
+As an example, we plot the first three footprints.
+
+```{r}
+par(pty="s")
+plot(subset(dinoprints, id==1, select = c(X, Y)), 
+     pch = 19, col="darkgreen",
+     asp=1)
+
+## I have added two more footprints to the plot
+points(subset(dinoprints, id==2, select = c(X, Y)), 
+     pch = 19, col="red")
+
+points(subset(dinoprints, id==3, select = c(X, Y)), 
+     pch = 19, col="blue")
+```
+
+
+## Transforming the data set
+
+For each footprint (i.e. all 20 `X` and `Y` coordinates for a given `id) we transform the coordinates to lengths $r$:
+
+\[
+r =\sqrt{x^2 + y^2}
+\]
+
+These are the distances from the centre $(0,0)$ of the footprint. 
+
+We genereate a new data frame for which each row contains the 20 distances $r_1, \dots, r_{20}$ and the group `Group` that the dinosaur belongs to.
+
+### One footprint
+
+This is how a single footprint can be transformed - we select the first footprint and calculate the distance $r$ for each landmark:
+
+```{r}
+footNo1 <- subset(dinoprints, id==1, select=c(X,Y))
+sqrt(footNo1$X^2 + footNo1$Y^2)
+```
+
+### All footprints
+
+We now calculate distances from the centre for all footprints:
+
+  
+```{r}
+dino.dist <- data.frame(matrix(nrow = max(dinoprints$id), ncol = 20))
+nDinos <- nrow(dino.dist)
+for(k in 1:nDinos) {
+  footprint <- subset(dinoprints, id==k, select=c(X,Y))
+  dino.dist[k, ] <- sqrt(footprint$X^2 + footprint$Y^2)
+}
+
+#knitr::kable(head(dino.dist)) %>% kable_styling(latex_options = "scale_down")
+pander(head(dino.dist), split.table = 80, style = 'rmarkdown', position="left")
+```
+  
+### Finding the `Group` label for each sample
+
+Now, the `Group` label for each sample is added. 
+
+```{r}
+# If we start dino.group as a vector, the factor structure will be destroyed. 
+dino.group<-factor()
+for(k in 1:nrow(dino.dist)) {
+  footGroup <- subset(dinoprints, id==k, select=Group)
+  # We take the first entry of Group for each footprint (they should be all the same) 
+  # and append them to dino.group
+  dino.group <- c(dino.group, footGroup$Group[1])
+}
+
+dino.dist$Group <- dino.group
+```
+
+## Visualising distances from the origin
+
+First, we plot the first footprint showing the indices of each landmark next to the points. 
+```{r}
+# Make square-shaped plot
+par( pty="s")
+
+plot(subset(dinoprints, id==1, select = c(X, Y)), 
+     xlim = c(-25,25), ylim=c(-45,25), 
+     pch=19, col="darkgreen",
+     #main = "Footprint 1",
+     xlab="x", ylab = "y", asp=1)
+
+## Add labels next to points
+for (i in 1:20) {
+  text(dinoprints[i,"X"]+2, dinoprints[i,"Y"]+2, labels = i, 
+       cex=0.75, col="black")
+}
+```
+
+In order to visualise the transformed data we rearrange the landmarks starting from landmark 4 which marks the base of the footprint and then rotating around the boundary of the footprint in anti-clockwise direction. This enables us to show the variation of distances from the centre as we move around the boundary of the footprint. We show the mean distances from the centre:
+
+```{r}
+lmCircle <- c(4,7,6,5,1,8,9,20,19,18,2,15,16,17,14,13,3,10,11,12)
+
+landmarkLab <- "Landmark"
+distLab <- "Distance"
+
+dino.dist.split <- split(subset(dino.dist, select=-Group), dino.dist$Group)
+dino.dist.means <- lapply(dino.dist.split, colMeans)
+
+matplot(
+  cbind(dino.dist.means$Ornithischia[lmCircle],
+        dino.dist.means$Theropoda[lmCircle]
+  ), col=c("red3", "black"), type="b", pch=19, ylim=c(0,20)
+  ,xlab=landmarkLab, ylab=distLab,
+  xaxt="n",
+  main = "Mean distances"
+)
+axis(1,at=1:length(lmCircle),labels = FALSE, cex.axis=0.5)
+for(i in 1:length(lmCircle)) mtext(1, at=i, text=lmCircle[i],line=((i+1)%%2)*1+0.5)
+```
+
+We also plot the median distances:
+
+```{r}
+library(robustbase)
+
+dino.dist.medians <- lapply(dino.dist.split, function(x) colMedians(as.matrix(x)))
+
+matplot(
+  cbind(dino.dist.medians$Ornithischia[lmCircle],
+        dino.dist.medians$Theropoda[lmCircle]
+  ), col=c("red3", "black"), type="b", pch=19, ylim=c(0,20)
+  ,xlab=landmarkLab, ylab=distLab,
+  xaxt="n",
+  main = "Median distances"
+)
+axis(1,at=1:length(lmCircle),labels = FALSE, cex.axis=0.5)
+for(i in 1:length(lmCircle)) mtext(1, at=i, text=lmCircle[i],line=((i+1)%%2)*1+0.5)
+```
+
+We plot the theropods in black:
+```{r}
+matplot(t(subset(dino.dist, 
+                 subset=Group=="Theropoda"))[lmCircle,], type="l", col="black", 
+        ylim=c(0,55), ylab=distLab,
+        xaxt="n")
+axis(1,at=1:length(lmCircle),labels = FALSE, cex.axis=1)
+for(i in 1:length(lmCircle)) {
+  mtext(1, at=i, text=lmCircle[i],line=((i+1)%%2)*1.2+1, cex = 1)
+}
+mtext(1, adj=0.5, text=landmarkLab, line = 3.5, cex=1)
+```
+
+This plot shows the ornithopods in red:
+
+```{r}
+matplot(t(subset(dino.dist, 
+                 subset=Group=="Ornithischia"))[lmCircle,], type="l", col="red", 
+        ylim=c(0,55), ylab=distLab,
+        xaxt="n")
+axis(1,at=1:length(lmCircle),labels = FALSE, cex.axis=1)
+for(i in 1:length(lmCircle)) {
+  mtext(1, at=i, text=lmCircle[i],line=((i+1)%%2)*1.2+1, cex = 1)
+}
+mtext(1, adj=0.5, text=landmarkLab, line = 3.5, cex=1)
+```
+
+## Machine learning
+
+After representing each footprint via the distances of 20 landmarks to the centre of the footprints we train five methods - Linear Discriminant Analysis (LDA), Logistic Regression (LR), Multi-layer perceptron (MLP), Random Forest (RF), Support Vector Machine (SVM) and Multivariate Adaptive Regression Splines (MARS) - for distinguishing *Theropoda* and *Ornithischia*. 
+
+### Training/testing split
+
+All methods will be trained on data using the same train/test split.
+
+```{r}
+set.seed(10)
+
+trainTestRatio <- 0.7
+spt <- sample(c(rep(0, trainTestRatio * nrow(dino.dist)), 
+                rep(1, (1 - trainTestRatio) * nrow(dino.dist))))
+train.dino.dist <- dino.dist[spt == 0,]
+test.dino.dist <- dino.dist[spt == 1,]
+```
+
+Train/test ratio is set to `r trainTestRatio*100`%. 
+
+```{r}
+# Calculate sensitivity, specificity and accuracy for a confusion matrix.
+confMatStats <- function(confMat) {
+  specificity <- confMat[1,1]/sum(confMat[,1])
+  sensitivity <- confMat[2,2]/sum(confMat[,2])
+  accuracy <- sum(diag(confMat))/sum(confMat)
+  
+  return(
+    c(Sensitivity=sensitivity, Specificity=specificity, Accuracy=accuracy)
+  )
+  
+}
+```
+
+All classification methods are trained using the training data set. The classification threshold is adjusted using the receiving operator characteristic (ROC) curve which compensates for the influence of the slight imbalance - the data contain more *Theropoda* than *Ornithischia* samples.
+
+### Linear Discriminant Analysis (LDA)
+
+Results before adjusting the threshold.
+
+```{r, message=FALSE}
+library(MASS)
+library(pROC)
+
+lda <- lda(Group ~. , data=train.dino.dist)
+lda.predict<- predict(lda, newdata = test.dino.dist)
+ldaConf<-table(
+  ifelse(lda.predict$posterior[,2]<0.5, 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(ldaConf)
+```
+
+```{r}
+stats.lda <- confMatStats(ldaConf)
+knitr::kable(stats.lda)
+```
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par(pty="s")
+lda.roc <- roc(test.dino.dist$Group, lda.predict$posterior[,2],
+               print.auc=TRUE, 
+               # auc.polygon=TRUE,
+               plot=TRUE,
+               print.auc.x=0.5,print.auc.y=0.3,
+               legacy.axes=TRUE,
+               xlim=c(1,0), ylim=c(0,1),
+               asp=1
+               #,main="Linear Discriminant Analysis (LDA)"
+               )
+lda.Opt <- coords(lda.roc, "best")
+
+points(lda.Opt$specificity, lda.Opt$sensitivity, col="red", pch=19, cex=1.5)
+
+if(plotPDF) {
+  pdf("figures/LDA_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)  
+  lda.roc <- roc(test.dino.dist$Group, lda.predict$posterior[,2],
+                 print.auc=TRUE, 
+                 # auc.polygon=TRUE,
+                 plot=TRUE,
+                 print.auc.x=0.5,print.auc.y=0.3,
+                 print.auc.cex=1,
+                 legacy.axes=TRUE,
+                 xlim=c(1,0), ylim=c(0,1),
+                 asp=1
+                #,main="Linear Discriminant Analysis (LDA)"
+               )
+  lda.Opt <- coords(lda.roc, "best")
+
+  points(lda.Opt$specificity, lda.Opt$sensitivity, col="red", pch=19, cex=1)
+  dev.off()
+}
+```
+
+Results after adjusting the threshold.
+
+```{r}
+ldaConf.Opt<-table(
+  ifelse(lda.predict$posterior[,2]<lda.Opt[[1]], 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(ldaConf.Opt)
+```
+```{r}
+stats.ldaOpt <- confMatStats(ldaConf.Opt)
+knitr::kable(stats.ldaOpt)
+```
+
+### Forward stepwise logistic regression (LR)
+
+We use forward step-wise logistic regression which selects a subset of the landmarks based on the Akaike Information Criterion (AIC). Results before adjusting the threshold.
+
+```{r, message=FALSE, warning=FALSE}
+# Set up null model
+glmNull <- glm(Group~1,data=train.dino.dist, family = "binomial")
+
+# Define scope: Maximal set of variables: All variables
+allVar <- formula(terms(Group~.,data=train.dino.dist))
+
+fstep.glm <- step(glmNull, direction='forward', scope=allVar, trace = 0)
+
+fstep.glm.predict<- predict(fstep.glm, test.dino.dist, type = "response")
+
+fstep.glmConf<-table(
+  ifelse(fstep.glm.predict<0.5, levels(test.dino.dist$Group)[1],
+                  levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(fstep.glmConf)
+```
+```{r}
+stats.glm <- confMatStats(fstep.glmConf)
+knitr::kable(stats.glm)
+```
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par(pty="s")
+glm.roc <- roc(test.dino.dist$Group, fstep.glm.predict,
+               print.auc=TRUE, 
+               # auc.polygon=TRUE,
+               plot=TRUE,
+               print.auc.x=0.5,print.auc.y=0.3,
+               legacy.axes=TRUE,
+               xlim=c(1,0), ylim=c(0,1),
+               #,main="Linear Discriminant Analysis (LDA)"
+               )
+glm.Opt <- coords(glm.roc, "best")
+
+points(glm.Opt$specificity, glm.Opt$sensitivity, col="red", pch=19, cex=1.5)
+
+if(plotPDF) {
+  pdf("figures/LR_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)
+  glm.forward.roc <- roc(test.dino.dist$Group, fstep.glm.predict,
+                         print.auc=TRUE, 
+                         # auc.polygon=TRUE,
+                         plot=TRUE,
+                         print.auc.x=0.5,print.auc.y=0.3,
+                         print.auc.cex=1,
+                         legacy.axes=TRUE
+               #,main="Linear Discriminant Analysis (LDA)"
+              )
+  points(glm.Opt$specificity, glm.Opt$sensitivity, col="red", pch=19, cex=1)
+  dev.off()
+}
+```
+
+Results after adjusting the threshold.
+
+```{r}
+glmConf.Opt<-table(
+  ifelse(fstep.glm.predict<glm.Opt[[1]], 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(glmConf.Opt)
+```
+```{r}
+stats.glmOpt <- confMatStats(glmConf.Opt)
+knitr::kable(stats.glmOpt)
+```
+
+Landmarks selected via stepwise logistic regression.
+
+```{r}
+attributes(terms(fstep.glm))$term.labels
+```
+
+### Multi-layer perceptron
+
+The `caret` package is used for carrying out a grid search for hyperparameter optimisation. Results before adjusting the threshold.
+
+```{r message=FALSE, warning=FALSE}
+library("caret")
+
+start_time <- Sys.time()
+nnetKappa <- train(Group ~ ., data = train.dino.dist, 
+                         tuneLength=10,
+                  method = "nnet", 
+                  metric="Kappa", 
+                  maxit=10000,
+                  trace=FALSE)
+end_time <- Sys.time()
+
+end_time - start_time
+
+nnetKappa.predict <- predict(nnetKappa, test.dino.dist, type="prob")
+names(nnetKappa.predict$Ornithischia) <- row.names(nnetKappa.predict)
+names(nnetKappa.predict$Theropoda) <- row.names(nnetKappa.predict)
+nnetConf <- table(
+  ifelse(nnetKappa.predict$Theropoda<0.5, 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(nnetConf)
+```
+
+```{r}
+stats.mlp <- confMatStats(nnetConf)
+knitr::kable(stats.mlp)
+```
+
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par(pty="s")
+nnet.roc <- roc(test.dino.dist$Group, as.numeric(nnetKappa.predict$Theropoda),
+                print.auc=TRUE, 
+                # auc.polygon=TRUE,
+                plot=TRUE,
+                print.auc.x=0.5,print.auc.y=0.3,
+                legacy.axes=TRUE,
+                asp=1
+                #, xlim=c(1,0), ylim=c(0.6,0.4)
+)
+# plot(nnet.roc,
+#      xlim=c(1,0), ylim=c(0,1)
+# )#, main = 'Theropods vs Ornithopods')
+# nnet.roc$auc
+
+nnet.Opt <- coords(nnet.roc, "best")
+# nnet.Opt
+
+points(nnet.Opt$specificity, nnet.Opt$sensitivity, col="red", pch=19, cex=1.5)
+
+if(plotPDF) {
+  pdf("figures/MLP_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)
+  nnet.roc <- roc(test.dino.dist$Group, as.numeric(nnetKappa.predict$Theropoda),
+                print.auc=TRUE, 
+                # auc.polygon=TRUE,
+                plot=TRUE,
+                print.auc.x=0.5,print.auc.y=0.3,
+                print.auc.cex=1,
+                legacy.axes=TRUE,
+                asp=1
+                #, xlim=c(1,0), ylim=c(0.6,0.4)
+  )
+  points(nnet.Opt$specificity, nnet.Opt$sensitivity, col="red", pch=19, cex=1)
+  dev.off()
+}
+```
+
+Results after adjusting the threshold.
+
+```{r}
+nnetConfOpt <- table(
+  ifelse(nnetKappa.predict$Theropoda<nnet.Opt[[1]], 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(nnetConfOpt)
+```
+
+```{r}
+stats.mlpOpt <- confMatStats(nnetConfOpt)
+knitr::kable(stats.mlpOpt)
+```
+
+### Random Forest 
+
+The `caret` package is used for carrying out a grid search for hyperparameter optimisation. Results before adjusting the threshold.
+
+```{r}
+start_time <- Sys.time()
+# Hyperparameter optimisation -> ntree?
+rfMtry <- train(Group ~ ., data = train.dino.dist, 
+                    tuneLength=10,
+                    method = "rf", 
+                    metric="Kappa", 
+                    #maxit=10000,
+                    trace=FALSE)
+end_time <- Sys.time()
+
+end_time - start_time
+
+
+rf.predictMtry <- predict(rfMtry, test.dino.dist, type="prob")
+
+rfConf <- table(
+  ifelse(rf.predictMtry$Theropoda<0.5, 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(rfConf)
+```
+
+```{r}
+stats.rf <- confMatStats(rfConf)
+knitr::kable(stats.rf)
+```
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par(pty="s")
+rf.roc <- roc(test.dino.dist$Group, rf.predictMtry$Theropoda, print.auc=TRUE, 
+              # auc.polygon=TRUE,
+              plot=TRUE,
+              print.auc.x=0.5,print.auc.y=0.3,
+              legacy.axes=TRUE,
+              asp=1
+              #, xlim=c(1,0), ylim=c(0.6,0.4)
+)
+rf.Opt <- coords(rf.roc, "best")
+#rf.Opt
+
+points(rf.Opt$specificity, rf.Opt$sensitivity, col="red", pch=19, cex = 1.5)
+
+if(plotPDF) {
+  pdf("figures/RF_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)
+  rf.roc <- roc(test.dino.dist$Group, rf.predictMtry$Theropoda, print.auc=TRUE, 
+              # auc.polygon=TRUE,
+              plot=TRUE,
+              print.auc.x=0.5,print.auc.y=0.3,
+              print.auc.cex=1,
+              legacy.axes=TRUE,
+              asp=1
+              #, xlim=c(1,0), ylim=c(0.6,0.4)
+    )
+  points(rf.Opt$specificity, rf.Opt$sensitivity, col="red", pch=19, cex = 1)
+  dev.off()
+}
+```
+
+```{r}
+rfConfOpt <- table(
+  ifelse(rf.predictMtry$Theropoda<rf.Opt[[1]], 
+         levels(test.dino.dist$Group)[1],
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group)
+knitr::kable(rfConfOpt)
+```
+
+Results after adjusting the threshold.
+
+```{r}
+stats.rfOpt <- confMatStats(rfConfOpt)
+knitr::kable(stats.rfOpt)
+```
+
+
+### Support Vector Machine (linear)
+
+The `caret` package is used for carrying out a grid search for hyperparameter optimisation. Results before adjusting the threshold.
+
+```{r}
+start_time <- Sys.time()
+svmKappa <- train(Group ~ ., data = train.dino.dist, 
+                       tuneLength=10,
+                       method = "svmLinear2", 
+                       metric="Kappa", 
+                       #maxit=10000,
+                      probability=TRUE,
+                      decision.values=TRUE,
+                       trace=FALSE)
+end_time <- Sys.time()
+
+end_time - start_time
+
+
+svm.predictKappa <- predict(svmKappa, test.dino.dist, type="prob")
+
+svmConf <- table(
+  ifelse(svm.predictKappa$Theropoda<0.5, 
+         levels(test.dino.dist$Group)[1], 
+         levels(test.dino.dist$Group)[2]), 
+  test.dino.dist$Group
+  )
+knitr::kable(svmConf)
+```
+
+```{r}
+knitr::kable(confMatStats(svmConf))
+```
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par( pty="s")
+svm.roc <- roc(test.dino.dist$Group, as.numeric(svm.predictKappa$Theropoda),
+               print.auc=TRUE, 
+               # auc.polygon=TRUE,
+               plot=TRUE,
+               print.auc.x=0.5,print.auc.y=0.3,
+               legacy.axes=TRUE,
+               asp=1
+               #, xlim=c(1,0), ylim=c(0.6,0.4)
+)
+
+svm.Opt <- coords(svm.roc, "best")
+
+points(svm.Opt$specificity, svm.Opt$sensitivity, col="red", pch=19, cex = 1.5)
+
+if(plotPDF) {
+  pdf("figures/SVMlinear_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)
+  svm.roc <- roc(test.dino.dist$Group, as.numeric(svm.predictKappa$Theropoda),
+               print.auc=TRUE, 
+               # auc.polygon=TRUE,
+               plot=TRUE,
+               print.auc.x=0.5,print.auc.y=0.3,
+               print.auc.cex=1,
+               legacy.axes=TRUE,
+               asp=1
+               #, xlim=c(1,0), ylim=c(0.6,0.4)
+    )
+  points(svm.Opt$specificity, svm.Opt$sensitivity, col="red", pch=19, cex = 1)
+  dev.off()
+}
+```
+
+Results after adjusting the threshold.
+
+```{r}
+svmConfOpt <- table(
+  ifelse(svm.predictKappa$Theropoda<svm.Opt$threshold, 
+         levels(test.dino.dist$Group)[1], 
+        levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(svmConfOpt)
+```
+
+```{r}
+knitr::kable(confMatStats(svmConfOpt))
+```
+
+### Support Vector Machine (radial kernel)
+
+The `caret` package is used for carrying out a grid search for hyperparameter optimisation. Results before adjusting the threshold.
+
+```{r}
+start_time <- Sys.time()
+svmRadialKappa <- train(Group ~ ., data = train.dino.dist, 
+                       tuneLength=10,
+                       method = "svmRadialSigma", 
+                       metric="Kappa", 
+                       #maxit=10000,
+                      prob.model=TRUE,
+                      decision.values=TRUE,
+                       trace=FALSE)
+end_time <- Sys.time()
+
+end_time - start_time
+
+
+svmRadial.predictKappa <- predict(svmRadialKappa, test.dino.dist, type="prob")
+
+svmRadialConf <- table(ifelse(svmRadial.predictKappa$Theropoda<0.5,
+                              levels(test.dino.dist$Group)[1], 
+                              levels(test.dino.dist$Group)[2]), 
+                       test.dino.dist$Group)
+knitr::kable(svmRadialConf)
+```
+
+
+```{r}
+stats.svm <- confMatStats(svmRadialConf)
+knitr::kable(stats.svm)
+```
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par(pty="s")
+svmRadial.roc <- roc(test.dino.dist$Group, svmRadial.predictKappa$Theropoda,
+               print.auc=TRUE, 
+               # auc.polygon=TRUE,
+               plot=TRUE,
+               print.auc.x=0.5,print.auc.y=0.3,
+               legacy.axes=TRUE,
+               asp=1
+               #, xlim=c(1,0), ylim=c(0.6,0.4)
+)
+
+svmRadial.Opt <- coords(svmRadial.roc, "best")
+
+points(svmRadial.Opt$specificity, svmRadial.Opt$sensitivity, 
+       col="red", pch=19, cex = 1.5)
+
+if(plotPDF) {
+  pdf("figures/SVMradSigma_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)
+  svmRadial.roc <- roc(test.dino.dist$Group, svmRadial.predictKappa$Theropoda,
+               print.auc=TRUE, 
+               # auc.polygon=TRUE,
+               plot=TRUE,
+               print.auc.x=0.5,print.auc.y=0.3,
+               print.auc.cex = 1,
+               legacy.axes=TRUE,
+               asp=1
+               #, xlim=c(1,0), ylim=c(0.6,0.4)
+  )
+  points(svmRadial.Opt$specificity, svmRadial.Opt$sensitivity, 
+         col="red", pch=19, cex = 1)
+  dev.off()
+}
+```
+
+Results after adjusting the threshold.
+
+```{r}
+svmRadialConfOpt <- table(
+  ifelse(svmRadial.predictKappa$Theropoda<svm.Opt$threshold,
+         levels(test.dino.dist$Group)[1], 
+         levels(test.dino.dist$Group)[2]), test.dino.dist$Group
+  )
+knitr::kable(svmRadialConfOpt)
+```
+
+```{r}
+stats.svmOpt <- confMatStats(svmRadialConfOpt)
+knitr::kable(stats.svmOpt)
+```
+
+### MARS
+
+Results before adjusting the threshold.
+
+```{r, message=FALSE}
+library(mda)
+marsResults <- fda(Group~., data = train.dino.dist, method = mars)
+
+# Obtain probabilities -> Second columns contains probability for Theropods
+marsScores <- predict(marsResults, test.dino.dist,type = "posterior")
+#marsScores[,2]
+marsConf <- table(ifelse(marsScores[,2]<0.5, levels(test.dino.dist$Group)[1], 
+                    levels(test.dino.dist$Group)[2]), test.dino.dist$Group)
+knitr::kable(marsConf)
+```
+
+```{r}
+stats.mars <- confMatStats(marsConf) 
+knitr::kable(stats.mars)
+```
+
+Determining an adjusted threshold via the ROC curve.
+
+```{r, message=FALSE}
+par(pty="s")
+mars.roc <- roc(test.dino.dist$Group, marsScores[,2],
+                print.auc=TRUE, 
+                # auc.polygon=TRUE,
+                plot=TRUE,
+                print.auc.x=0.5,print.auc.y=0.3,
+                legacy.axes=TRUE,
+                asp=1
+                #,main="Linear Discriminant Analysis (LDA)"
+)
+
+mars.Opt <- coords(mars.roc, "best")
+#mars.Opt
+
+points(mars.Opt$specificity, mars.Opt$sensitivity, col="red", pch=19, cex = 1.5)
+
+if(plotPDF) {
+  pdf("figures/MARS_ROC.pdf")
+  par(mar=c(4,4,1,1), cex=2)
+  mars.roc <- roc(test.dino.dist$Group, marsScores[,2],
+                print.auc=TRUE, 
+                # auc.polygon=TRUE,
+                plot=TRUE,
+                print.auc.x=0.5,print.auc.y=0.3,
+                print.auc.cex=1,
+                legacy.axes=TRUE,
+                asp=1
+                #,main="Linear Discriminant Analysis (LDA)"
+  )
+  points(mars.Opt$specificity, mars.Opt$sensitivity, col="red", pch=19, cex = 1)
+  dev.off()
+}
+```
+
+Results after adjusting the threshold.
+
+```{r}
+marsConfOpt <- table(
+  ifelse(marsScores[,2]<mars.Opt$threshold, levels(test.dino.dist$Group)[1], 
+                    levels(test.dino.dist$Group)[2]), test.dino.dist$Group)
+knitr::kable(marsConfOpt)
+```
+
+```{r}
+stats.marsOpt <- confMatStats(marsConfOpt)
+knitr::kable(stats.marsOpt)
+```
+
+### Plots of performance metrics
+
+```{r, fig.ncol=2  , out.width="50%", fig.align='center'}
+metrics <- data.frame(
+  rbind(
+    stats.glm, stats.glmOpt,
+    stats.mlp, stats.mlpOpt,
+    stats.lda, stats.ldaOpt,
+    stats.svm, stats.svmOpt,
+    stats.rf, stats.rfOpt,
+    stats.mars, stats.marsOpt
+  )
+)
+
+# layout(matrix(1:6, nrow = 3, ncol = 2, byrow = TRUE))
+# for (i in 1:6) {
+#   #par(pty="s")
+#   matplot(metrics[c(2*i-1,2*i), ], xlim=c(0.5,2.5), ylim = c(0.65,1), 
+#           pch = 1, type = "b", col = c("black","red",  "blue"), lty=c(2,2,1),
+#           ylab="", main=rownames(metrics[2*i-1, ]), xaxt="n"#, asp=1
+#           )
+#     axis(side=1,at=c(1,2),labels=c(expression(paste(theta,"=0.5")), expression(paste(theta, " adjusted"))))
+# }
+
+
+par(mfrow=c(1,2))
+for (i in 1:6) {
+  #par(pty="s")
+  matplot(metrics[c(2*i-1,2*i), ], xlim=c(0.5,2.5), ylim = c(0.65,1), 
+          pch = 1, type = "b", col = c("black","red",  "blue"), lty=c(2,2,1),
+          ylab="", main=rownames(metrics[2*i-1, ]), xaxt="n"#, asp=1
+          )
+    axis(side=1,at=c(1,2),labels=c(expression(paste(theta,"=0.5")), 
+                                   expression(paste(theta, " adjusted"))))
+}
+
+if(plotPDF) {
+  for (i in 1:6) {
+    pdf(sprintf("figures/%s.pdf", rownames(metrics[2*i-1, ])))
+    par(mar=c(4,4,1,1), cex=2)
+    matplot(metrics[c(2*i-1,2*i), ], xlim=c(0.5,2.5), ylim = c(0.65,1), 
+            pch = 1, type = "b", col = c("black","red",  "blue"), lty=c(2,2,1),
+            ylab="", xaxt="n")
+    axis(side=1,at=c(1,2),labels=c(expression(paste(theta,"=0.5")), expression(paste(theta, " adjusted"))))
+    dev.off()
+  }
+}
+```
+
+## Misclassified samples
+
+For each method, the samples that are misclassified are determined. 
+
+### Linear Discrimiant Analysis
+
+```{r}
+lda.false.orn <- which( 
+  (lda.predict$posterior[,2]>0.5) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+                        )
+lda.false.orn
+
+lda.false.ther <- which( 
+  (lda.predict$posterior[,2]<0.5) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2]))
+lda.false.ther
+
+# Summarise indices of all misclassified samples
+lda.misclass <- as.integer(names(c(lda.false.orn, lda.false.ther)))
+
+# Misclassified samples
+lda.false.orn.opt <- which( 
+  (lda.predict$posterior[,2]>lda.Opt$threshold) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+lda.false.orn.opt
+
+lda.false.ther.opt <- which( 
+  (lda.predict$posterior[,2]<lda.Opt$threshold) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+lda.false.ther.opt
+
+# Summarise indices of all misclassified samples
+lda.misclass.opt <- as.integer(names(c(lda.false.orn.opt, lda.false.ther.opt)))
+
+```
+
+
+### Forward stepwise regression
+
+```{r}
+# Misclassified ornithopods
+glm.false.orn <- which(
+  (fstep.glm.predict>0.5) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+glm.false.orn
+
+# Misclassified theropods
+glm.false.ther <-which(
+  (fstep.glm.predict<0.5) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+glm.false.ther
+
+# Summarise indices of all misclassified samples
+glm.misclass <- as.integer(names(c(glm.false.orn, glm.false.ther)))
+
+# Misclassified ornithopods
+glm.false.orn.opt <- which(
+  (fstep.glm.predict>glm.Opt$threshold) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+glm.false.orn.opt
+
+# Misclassified theropods
+glm.false.ther.opt <-which(
+  (fstep.glm.predict<glm.Opt$threshold) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+glm.false.ther.opt
+
+# Summarise indices of all misclassified samples
+glm.misclass.opt <- as.integer(names(c(glm.false.orn.opt, glm.false.ther.opt)))
+glm.misclass.opt
+```
+
+### Multi-layer perceptron
+
+```{r}
+# Misclassified ornithopods -> Slightly silly way of using setNames... changing directly in data frame not straightforward
+nnet.false.orn <- which(
+  (setNames(nnetKappa.predict$Ornithischia,row.names(nnetKappa.predict))<0.5) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+nnet.false.orn
+
+# Misclassified theropods
+nnet.false.ther <-which(
+  (setNames(nnetKappa.predict$Theropoda,row.names(nnetKappa.predict))<0.5) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+nnet.false.ther
+
+# Summarise indices of all misclassified samples
+nnet.misclass <- as.integer(names(c(nnet.false.orn, nnet.false.ther)))
+nnet.misclass
+
+# Misclassified ornithopods -> Slightly silly way of using setNames... changing directly in data frame not straightforward
+nnet.false.orn.opt <- which(
+  (setNames(nnetKappa.predict$Ornithischia,row.names(nnetKappa.predict))<nnet.Opt$threshold) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+nnet.false.orn.opt
+
+# Misclassified theropods
+nnet.false.ther.opt <-which(
+  (setNames(nnetKappa.predict$Theropoda,row.names(nnetKappa.predict))<nnet.Opt$threshold) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+                            )
+nnet.false.ther.opt
+
+# Summarise indices of all misclassified samples
+nnet.misclass.opt <- as.integer(names(c(nnet.false.orn.opt, nnet.false.ther.opt)))
+nnet.misclass.opt
+```
+
+### Random Forest
+
+```{r}
+# Misclassified ornithopods
+rf.false.orn <- which(
+  (setNames(rf.predictMtry$Ornithischia<0.5, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+rf.false.orn
+
+# Misclassified theropods
+rf.false.ther <-which(
+  (setNames(rf.predictMtry$Theropoda<0.5, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+rf.false.ther
+
+# Summarise indices of all misclassified samples
+rf.misclass <- as.integer(names(c(rf.false.orn, rf.false.ther)))
+rf.misclass
+
+# Misclassified ornithopods
+rf.false.orn.opt <- which(
+  (setNames(rf.predictMtry$Ornithischia<rf.Opt$threshold, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+rf.false.orn.opt
+
+# Misclassified theropods
+rf.false.ther.opt <-which(
+  (setNames(rf.predictMtry$Theropoda<rf.Opt$threshold, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+rf.false.ther.opt
+
+# Summarise indices of all misclassified samples
+rf.misclass.opt <- as.integer(names(c(rf.false.orn.opt, rf.false.ther.opt)))
+rf.misclass.opt
+```
+
+### Support Vector Machine
+
+```{r}
+# Misclassified ornithopods
+# We need to use rf.predictMtry to find the indices, svm seems to destroy these indices!
+svm.false.orn <- which(
+  (setNames(svm.predictKappa$Theropoda>0.5, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+svm.false.orn
+
+# Misclassified theropods
+svm.false.ther <-which(
+  (setNames(svm.predictKappa$Theropoda<0.5, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+svm.false.ther
+
+svm.misclass <- as.integer(names(c(svm.false.orn, svm.false.ther)))
+svm.misclass
+
+# Misclassified ornithopods
+# We need to use rf.predictMtry to find the indices, svm seems to destroy these indices!
+svm.false.orn.opt <- which(
+  (setNames(svm.predictKappa$Theropoda>svm.Opt$threshold, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+svm.false.orn.opt
+
+# Misclassified theropods
+svm.false.ther.opt <-which(
+  (setNames(svm.predictKappa$Theropoda<svm.Opt$threshold, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+svm.false.ther.opt
+
+svm.misclass.opt <- as.integer(names(c(svm.false.orn.opt, svm.false.ther.opt)))
+svm.misclass.opt
+```
+
+### MARS
+
+```{r}
+# Misclassified ornithopods
+# We need to use rf.predictMtry to get the indices!
+mars.false.orn <- which(
+  (setNames(marsScores[,2]>0.5, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+mars.false.orn
+
+# Misclassified theropods
+mars.false.ther <-which(
+  (setNames(marsScores[,2]<0.5, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+mars.false.ther
+
+mars.misclass <- as.integer(names(c(mars.false.orn, mars.false.ther)))
+mars.misclass
+
+
+# Misclassified ornithopods
+# We need to use rf.predictMtry to get the indices!
+mars.false.orn.opt <- which(
+  (setNames(marsScores[,2]>mars.Opt$threshold, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[1])
+  )
+mars.false.orn.opt
+
+# Misclassified theropods
+mars.false.ther.opt <-which(
+  (setNames(marsScores[,2]<mars.Opt$threshold, row.names(rf.predictMtry))) & 
+    (test.dino.dist$Group==levels(test.dino.dist$Group)[2])
+  )
+mars.false.ther.opt
+
+mars.misclass.opt <- as.integer(names(c(mars.false.orn.opt, mars.false.ther.opt)))
+mars.misclass.opt
+```
+
+### Summarise all misclassified samples
+
+Misclassied samples for all methods are summarised in a table. We determine which footprints have been misclassified by all six methods...
+
+```{r}
+classifiers <- read.csv("classifiers.csv", header=T, row.names=1)
+classifiers <- classifiers[-which(is.na(classifiers[,4])), ]
+
+all.misclass <- sort(unique(c(lda.misclass, glm.misclass, nnet.misclass, 
+                              rf.misclass, svm.misclass, mars.misclass)))
+all.misclass
+
+misclassTable <- classifiers[all.misclass, ]
+misclassTable$lda <- (all.misclass %in% lda.misclass)
+misclassTable$glm <- (all.misclass %in% glm.misclass)
+misclassTable$nnet <- (all.misclass %in% nnet.misclass)
+misclassTable$rf <- (all.misclass %in% rf.misclass)
+misclassTable$svm <- (all.misclass %in% svm.misclass)
+misclassTable$mars <- (all.misclass %in% mars.misclass)
+misclassTable$indices <- all.misclass
+
+# Quantify which samples are frequently misclassified
+misclassTable$nMisclass <- rowSums(misclassTable[,c("lda", "glm", "nnet", "rf", "svm", "mars")])
+
+# Drop irrelevant columns for output
+misclassTableOut <- subset(misclassTable, select = -c(SizeBin, ProjBin))
+
+knitr::kable(misclassTableOut) %>%   kable_styling(latex_options = "scale_down")
+```
+
+## Plots of misclassified footprints
+
+Footprints that were misclassified by more than half of the methods will be visualised using wireframe graphs.
+```{r}
+# misclassTable[misclassTable$nMisclass==6,]
+lmArc1 <- c(4, 7, 6, 5, 1, 8, 9)
+lmArc2 <- c(20, 19, 18, 2, 15, 16, 17)
+lmArc3 <- c(14, 13, 3, 10, 11, 12,4)
+
+# TODO: Code as function!
+nTracks <- nrow(misclassTable[misclassTable$nMisclass==6,])
+
+nTrackCols <- 3
+
+lenTrackVector <- ceiling(nTracks/nTrackCols)
+trackVector <- integer(lenTrackVector)
+
+trackVector[1:nTracks] <- 1:nTracks
+
+misclassIndicesGroup <- subset(misclassTable, 
+                               subset = nMisclass==6, 
+                               select = c(Group, indices))
+
+
+layout(
+  matrix(
+    trackVector, ncol = 3, byrow = TRUE)
+)
+par(pty="s")
+for (i in 1:nTracks ) {
+  footprint <- subset(
+      dinoprints, select = c(X, Y), 
+      subset = id==misclassIndicesGroup[i,"indices"]
+      )
+  plot(footprint,
+    col=ifelse(misclassIndicesGroup[i,"Group"]=="Theropoda", "black", "red"),
+    main=rownames(misclassIndicesGroup)[i]#=misclassIndicesGroup[i,"indices"],
+    ,pch = 19, asp =1 
+    )
+  
+    lines(footprint[lmArc1, ],
+          type="b",
+          col=ifelse(misclassIndicesGroup[i,"Group"]=="Theropoda", 
+                     "black", "red"))
+    
+    lines(footprint[lmArc2, ],
+          type="b",
+          col=ifelse(misclassIndicesGroup[i,"Group"]=="Theropoda", 
+                     "black", "red"))
+    
+    lines(footprint[lmArc3, ],
+          type="b",
+          col=ifelse(misclassIndicesGroup[i,"Group"]=="Theropoda", 
+                     "black", "red"))
+  
+}
+```
+
+```{r}
+plotFootprint <- function(footprint, ...) {
+    par(pty="s")
+  
+    plot(footprint,pch = 19, asp =1, ...)
+    
+    lmArc1 <- c(4, 7, 6, 5, 1, 8, 9)
+    lmArc2 <- c(20, 19, 18, 2, 15, 16, 17)
+    lmArc3 <- c(14, 13, 3, 10, 11, 12,4)
+  
+    lines(footprint[lmArc1, ], type="b", ...)
+
+    lines(footprint[lmArc2, ], type="b",...)
+
+    lines(footprint[lmArc3, ], type="b",...)
+}
+plotFootprint(footprint,
+    col=ifelse(misclassIndicesGroup[i,"Group"]=="Theropoda", "black", "red"),
+    main=rownames(misclassIndicesGroup)[i])
+```
+
+### Misclassified by 6 (= all) methods 
+
+```{r, fig.width=10}
+#, fig.width=14}
+plotSomeFootprints <- function(dinoprints, group, indices, names, nCols=3, ...) {
+
+  nTracks <- length(group)
+
+  lenTrackVector <- ceiling(nTracks/nCols)
+
+  #print(lenTrackVector)
+  
+  trackVector <- integer(lenTrackVector*nCols)
+#print(trackVector)
+  trackVector[1:nTracks] <- 1:nTracks
+
+  # misclassIndicesGroup <- subset(misclassTable, subset = nMisclass==6, select = c(Group, indices))
+  #print(trackVector)
+
+layout(
+  matrix(
+    trackVector, ncol = nCols, byrow = TRUE)
+)
+#par(pty="s")
+for (i in 1:nTracks ) {
+  footprint <- subset(
+      dinoprints, select = c(X, Y), 
+      subset = id==indices[i]
+      )
+  plotFootprint(footprint,
+    col=ifelse(group[i]=="Theropoda", "black", "red")
+    , main=names[i], ...
+    )
+}
+
+}
+plotSomeFootprints(dinoprints = dinoprints, 
+                   group = misclassTable[misclassTable$nMisclass==6, "Group"], 
+                   indices = misclassTable[misclassTable$nMisclass==6, "indices"], 
+                   names = rownames(misclassTable[misclassTable$nMisclass==6, ])
+                   #, cex=3, cex.lab=2, cex.axis=2, cex.main=2
+                   #, cex=2, cex.lab=2, cex.axis=2,  cex.main=2
+                   )
+```
+
+
+### Misclassified by 5 methods 
+
+```{r, fig.width=10}
+# misclassTable[misclassTable$nMisclass==5,]
+plotSomeFootprints(dinoprints = dinoprints, 
+                   group = misclassTable[misclassTable$nMisclass==5, "Group"], 
+                   indices = misclassTable[misclassTable$nMisclass==5, "indices"], 
+                   names = rownames(misclassTable[misclassTable$nMisclass==5, ])
+                   #, cex=3, cex.lab=2, cex.axis=2, cex.main=2
+                   #, cex=2, cex.lab=2, cex.axis=2, cex.main=2
+                   )
+```
+
+### Misclassified by 4 methods 
+
+```{r, fig.width=10}
+#misclassTable[misclassTable$nMisclass==4,]
+plotSomeFootprints(dinoprints = dinoprints, group = misclassTable[misclassTable$nMisclass==4, "Group"], indices = misclassTable[misclassTable$nMisclass==4, "indices"], names = rownames(misclassTable[misclassTable$nMisclass==4, ])
+                   #,cex=2, cex.lab=2, cex.axis=2, cex.main=2
+                   )
+```
+```{r}
+# Plot misclassified samples to PDF
+if(plotPDF) {
+  basePrintNames <- gsub(" ", "_", rownames(misclassTable))
+  for ( i in 1:nrow(misclassTable)) {
+    printFN <- sprintf("figures/%s.pdf", basePrintNames[i] )
+    footprint <- subset(
+                  dinoprints, select = c(X, Y),
+                  subset = id==misclassTable[i,"indices"]
+                 ) 
+      
+    pdf(printFN)
+    par(mar=c(4,4,1,1), cex=2)
+    plotFootprint(footprint,
+                  col=ifelse(
+                    misclassTable[i,"Group"]=="Theropoda",
+                    "black", "red"))
+    dev.off()
+  }
+}
+```
